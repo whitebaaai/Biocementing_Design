@@ -27,20 +27,120 @@ class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
         layout.prop(context.scene, "my_dropdown_menu_2", text="")
         
         # TODO: Move this to a CSV or a database that stores good combinations
-        # Display an icon next to the dropdown depending on which recipe is selected
+        # Display an icon and text depending on which recipe is selected
         if context.scene.my_dropdown_menu_1 == "option1" and context.scene.my_dropdown_menu_2 == "optionA":
-            layout.label(text="Manufacturability: Good", icon='CHECKMARK')
+            layout.label(text="Recipe: Good", icon='CHECKMARK')
         else:
-            layout.label(text="Manufacturability: Unknown", icon='QUESTION')
+            layout.label(text="Recipe: Unknown", icon='QUESTION')
 
         # Button to copy selected faces
+        layout.operator("biocement.validate_geometry", text="Validate Geometry")
+        # Display an icon and text depending on if the geometry is valid
+        if context.scene.manufacturable:
+            layout.label(text="Manufacturability: Good", icon='CHECKMARK')
+        else:
+            layout.label(text="Manufacturability: Bad", icon='ERROR')
+
         layout.operator("biocement.create_conf_outer_mold", text="Create Conformal Outer Mold")
         layout.operator("biocement.create_cast_outer_mold", text="Create Castable Outer Mold")
         layout.operator("biocement.calculate_cure_time", text="Calculate Cure Time")
-
         # TODO: Add ability to create two piece molds
 
         layout.label(text=f"Expected Curing Time: {context.scene.cure_time:.1f} hr")
+
+class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
+    "Validate that the geometry is suitable for casting in BioCement. Checks minimum mesh thickness and edge sharpness."
+    bl_idname = "biocement.validate_geometry"
+    bl_label = "Validate Geometry"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if obj is None or obj.type != 'MESH':
+            self.report({'WARNING'}, "No active mesh object")
+            return {'CANCELLED'}
+        
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.transform_apply(scale=True)
+        mesh = obj.data
+        bm = bmesh.new()
+        bm.from_mesh(mesh)
+
+        if not validate_mesh_thickness(obj, bm):
+            self.report({'WARNING'}, "Mesh does not meet the minimum thickness requirement")
+            context.scene.manufacturable = False
+            return {'CANCELLED'}
+        else:
+            context.scene.manufacturable = True
+
+        try:
+            if not validate_edge_sharpness(bm):
+                self.report({'WARNING'}, "Mesh has sharp edges")
+                context.scene.manufacturable = False
+                return {'CANCELLED'}
+            else:
+                context.scene.manufacturable = True
+        except ValueError:  
+            self.report({'WARNING'}, "Mesh is non-manifold")
+            context.scene.manufacturable = False
+            return {'CANCELLED'}
+
+        if not validate_vertex_sharpness(bm):
+            self.report({'WARNING'}, "Mesh has sharp vertices")
+            context.scene.manufacturable = False
+            return {'CANCELLED'}
+        else:
+            context.scene.manufacturable = True
+
+        return {'FINISHED'}
+    
+def validate_mesh_thickness(obj, bm, min_thickness=0.05):
+    # Check if the mesh has a minimum thickness
+    for face in bm.faces:
+        center = face.calc_center_median()
+        normal = -face.normal.normalized()
+
+        # Slightly offset the ray origin along the normal to avoid precision issues
+        offset_center = center + normal * 0.001
+        
+        # Add an arrow to the scene to visualize the normal
+        # bpy.ops.object.empty_add(type='SINGLE_ARROW', location=center, rotation=normal.to_track_quat('Z', 'Y').to_euler())
+
+        # Cast a ray from the center point along the face normal
+        result, location, normal, index = obj.ray_cast(offset_center, normal)
+
+        # If the ray doesn't hit anything, the distance is None
+        if (location - offset_center).length < min_thickness:
+            return False
+        
+    return True
+
+def validate_edge_sharpness(bm, min_angle=np.pi/6):
+    # Check if the mesh has sharp edges
+    for edge in bm.edges:
+        # Get the angle between the normals of the two faces adjacent to the edge
+        try:
+            angle = edge.calc_face_angle()
+        except ValueError:
+            bpy.ops.object.empty_add(type='PLAIN_AXES', location=(edge.verts[0].co + edge.verts[1].co)/2)
+            raise ValueError("Non-manifold mesh")
+        if angle > np.pi - min_angle:
+            return False
+    return True
+
+def validate_vertex_sharpness(bm, min_angle=np.pi/6):
+    # Check for sharp vertices using face normals
+    for vert in bm.verts:
+        linked_faces = vert.link_faces
+        for i, face1 in enumerate(linked_faces):
+            for face2 in linked_faces[i+1:]:
+                normal1 = face1.normal
+                normal2 = face2.normal
+                angle = normal1.angle(normal2)
+                if angle > np.pi - min_angle:
+                    bpy.ops.object.empty_add(type='PLAIN_AXES', location=vert.co)
+                    return False    
+    return True
 
 class BIOCEMENT_OT_create_conf_outer_mold(bpy.types.Operator):
     """Create Conformal Outer Mold. Select all faces except the faces that will be exposed to air."""
@@ -250,12 +350,20 @@ def register():
         default=0.0
     )
 
+    bpy.types.Scene.manufacturable = bpy.props.BoolProperty(
+        name="Manufacturable",
+        description="Whether the geometry is manufacturable",
+        default=False
+    )
+
+    bpy.utils.register_class(BIOCEMENT_OT_validate_geometry)
     bpy.utils.register_class(BIOCEMENT_OT_create_conf_outer_mold)
     bpy.utils.register_class(BIOCEMENT_OT_create_cast_outer_mold)
     bpy.utils.register_class(BIOCEMENT_OT_calculate_cure_time)
     bpy.utils.register_class(BIOCEMENT_PT_MainPanel)
 
 def unregister():
+    bpy.utils.unregister_class(BIOCEMENT_OT_validate_geometry)
     bpy.utils.unregister_class(BIOCEMENT_OT_create_conf_outer_mold)
     bpy.utils.unregister_class(BIOCEMENT_OT_create_cast_outer_mold)
     bpy.utils.unregister_class(BIOCEMENT_OT_calculate_cure_time)
