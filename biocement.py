@@ -265,8 +265,6 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
         z_min, z_max = obj.bound_box[0][2], bound_z_avg
         
         # Create a cube that bounds the object
-        # BUG: The cube centers on the object but if the object isn't in the center, the z-axis is off
-        # Regenerating the cube fixes this
         bpy.ops.mesh.primitive_cube_add(
             size=1, 
             location=((x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max - 0.15) / 2), 
@@ -305,7 +303,7 @@ class BIOCEMENT_OT_calculate_cure_time(bpy.types.Operator):
         self.report({'INFO'}, f"Volume: {volume:.2f} m^3")
 
         # TODO: Placeholder calc for cure_time
-        # Actually do this based on a volume to surface area ratio calculation
+        # Cure time is actually pretty complicated (https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860356)
         cure_time = volume
         context.scene.cure_time = cure_time
         self.report({'INFO'}, f"Cure time calculated: {cure_time:.1f} hr")
