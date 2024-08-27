@@ -62,6 +62,7 @@ class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
         
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.transform_apply(scale=True)
+
         mesh = obj.data
         bm = bmesh.new()
         bm.from_mesh(mesh)
@@ -211,6 +212,8 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
             return {'CANCELLED'}
         
         bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.transform_apply(location=True, scale=True)
+
         mesh = obj.data
         bm = bmesh.new()
         bm.from_mesh(mesh)
@@ -248,7 +251,6 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
         # context.collection.objects.link(basis)
 
         # NVM the above, it's more complicated than we need, just use an axis-aligned bounding box
-        bpy.ops.object.transform_apply(scale=True)
 
         # Get boundary of un-selected faces and calculate average Z
         selected_faces = [f for f in bm.faces if not f.select]
@@ -257,7 +259,6 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
         else:
             boundary_face = selected_faces[0]
         bound_z_avg = sum([v.co.z for v in boundary_face.verts]) / len(boundary_face.verts)
-        print(f"Average Z: {bound_z_avg}")
 
         x_min, x_max = obj.bound_box[0][0], obj.bound_box[6][0]
         y_min, y_max = obj.bound_box[0][1], obj.bound_box[6][1]
@@ -294,9 +295,8 @@ class BIOCEMENT_OT_calculate_cure_time(bpy.types.Operator):
             return {'CANCELLED'}
         
         bpy.ops.object.mode_set(mode='OBJECT')
-
-        # Apply the scale to the object to ensure that the volume is calculated correctly
         bpy.ops.object.transform_apply(scale=True)
+
         mesh = obj.data
         bm = bmesh.new()
         bm.from_mesh(mesh)
