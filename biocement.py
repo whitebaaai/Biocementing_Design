@@ -10,7 +10,7 @@ import numpy as np
 
 class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
     bl_label = "BioCement"
-    bl_idname = "biocement.main_panel"
+    bl_idname = "BIOCEMENT_PT_MainPanel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "BioCement"
@@ -36,10 +36,22 @@ class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
         # Button to copy selected faces
         layout.operator("biocement.validate_geometry", text="Validate Geometry")
         # Display an icon and text depending on if the geometry is valid
-        if context.scene.manufacturable:
-            layout.label(text="Manufacturability: Good", icon='CHECKMARK')
+        if context.scene.mesh_thickness:
+            layout.label(text="Mesh Thickness: Good", icon='CHECKMARK')
         else:
-            layout.label(text="Manufacturability: Bad", icon='ERROR')
+            layout.label(text="Mesh Thickness: Bad", icon='ERROR')
+        if context.scene.mesh_manifold:
+            layout.label(text="Mesh Manifold: Good", icon='CHECKMARK')
+        else:
+            layout.label(text="Mesh Manifold: Bad", icon='ERROR')
+        if context.scene.edge_sharpness:
+            layout.label(text="Edge Sharpness: Good", icon='CHECKMARK')
+        else:
+            layout.label(text="Edge Sharpness: Bad", icon='ERROR')
+        if context.scene.vertex_sharpness:
+            layout.label(text="Vertex Sharpness: Good", icon='CHECKMARK')
+        else:
+            layout.label(text="Vertex Sharpness: Bad", icon='ERROR')
 
         layout.operator("biocement.create_conf_outer_mold", text="Create Conformal Outer Mold")
         layout.operator("biocement.create_cast_outer_mold", text="Create Castable Outer Mold")
@@ -73,29 +85,30 @@ class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
 
         if not validate_mesh_thickness(obj, bm):
             self.report({'WARNING'}, "Mesh does not meet the minimum thickness requirement")
-            context.scene.manufacturable = False
+            context.scene.mesh_thickness = False
             return {'CANCELLED'}
         else:
-            context.scene.manufacturable = True
+            context.scene.mesh_thickness = True
 
         try:
             if not validate_edge_sharpness(bm):
                 self.report({'WARNING'}, "Mesh has sharp edges")
-                context.scene.manufacturable = False
+                context.scene.edge_sharpness = False
                 return {'CANCELLED'}
             else:
-                context.scene.manufacturable = True
+                context.scene.edge_sharpness = True
+            context.scene.mesh_manifold = True
         except ValueError:  
             self.report({'WARNING'}, "Mesh is non-manifold")
-            context.scene.manufacturable = False
+            context.scene.mesh_manifold = False
             return {'CANCELLED'}
 
         if not validate_vertex_sharpness(bm):
             self.report({'WARNING'}, "Mesh has sharp vertices")
-            context.scene.manufacturable = False
+            context.scene.vertex_sharpness = False
             return {'CANCELLED'}
         else:
-            context.scene.manufacturable = True
+            context.scene.vertex_sharpness = True
 
         return {'FINISHED'}
     
@@ -301,7 +314,7 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
         bpy.ops.mesh.primitive_cube_add(
             size=1, 
             location=((x_min + x_max) / 2, (y_min + y_max) / 2, (z_min + z_max - 0.15) / 2), 
-            scale=(x_max - x_min + 0.3, y_max - y_min + 0.3, z_max - z_min + 0.15)
+            scale=(x_max - x_min + 0.3, y_max - y_min + 0.3, z_max - z_min + 0.14)
         )
 
         # Boolean difference to create the castable outer mold
@@ -400,9 +413,27 @@ def register():
         default=0.0
     )
 
-    bpy.types.Scene.manufacturable = bpy.props.BoolProperty(
-        name="Manufacturable",
-        description="Whether the geometry is manufacturable",
+    bpy.types.Scene.mesh_thickness = bpy.props.BoolProperty(
+        name="Mesh Thickness",
+        description="Whether the geometry meets the thickness requirement",
+        default=False
+    )
+
+    bpy.types.Scene.edge_sharpness = bpy.props.BoolProperty(
+        name="Edge Sharpness",
+        description="Whether the geometry has edges that are too sharp",
+        default=False
+    )
+
+    bpy.types.Scene.mesh_manifold = bpy.props.BoolProperty(
+        name="Manifold Mesh",
+        description="Whether the geometry is manifold",
+        default=False
+    )
+
+    bpy.types.Scene.vertex_sharpness = bpy.props.BoolProperty(
+        name="Vertex Sharpness",
+        description="Whether the geometry has vertices that are too sharp",
         default=False
     )
 
