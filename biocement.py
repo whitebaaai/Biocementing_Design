@@ -18,20 +18,20 @@ class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
 
-        # Dropdown menu 1
-        layout.label(text="Dropdown Menu 1:")
-        layout.prop(context.scene, "my_dropdown_menu_1", text="")
+        # # Dropdown menu 1
+        # layout.label(text="Dropdown Menu 1:")
+        # layout.prop(context.scene, "my_dropdown_menu_1", text="")
 
-        # Dropdown menu 2
-        layout.label(text="Dropdown Menu 2:")
-        layout.prop(context.scene, "my_dropdown_menu_2", text="")
+        # # Dropdown menu 2
+        # layout.label(text="Dropdown Menu 2:")
+        # layout.prop(context.scene, "my_dropdown_menu_2", text="")
         
-        # TODO: Move this to a CSV or a database that stores good combinations
-        # Display an icon and text depending on which recipe is selected
-        if context.scene.my_dropdown_menu_1 == "option1" and context.scene.my_dropdown_menu_2 == "optionA":
-            layout.label(text="Recipe: Good", icon='CHECKMARK')
-        else:
-            layout.label(text="Recipe: Unknown", icon='QUESTION')
+        # # TODO: Move this to a CSV or a database that stores good combinations
+        # # Display an icon and text depending on which recipe is selected
+        # if context.scene.my_dropdown_menu_1 == "option1" and context.scene.my_dropdown_menu_2 == "optionA":
+        #     layout.label(text="Recipe: Good", icon='CHECKMARK')
+        # else:
+        #     layout.label(text="Recipe: Unknown", icon='QUESTION')
 
         # Button to copy selected faces
         layout.operator("biocement.validate_geometry", text="Validate Geometry")
@@ -46,7 +46,11 @@ class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
         layout.operator("biocement.calculate_cure_time", text="Calculate Cure Time")
         # TODO: Add ability to create two piece molds
 
-        layout.label(text=f"Expected Curing Time: {context.scene.cure_time:.1f} hr")
+        layout.label(text=f"# of Treatments: {context.scene.cure_time:.1f} hr")
+        layout.label(text=f"Media: {context.scene.cure_time:.1f} hr")
+        layout.label(text=f"Urea: {context.scene.cure_time:.1f} hr")
+        layout.label(text=f"Bacteria: {context.scene.cure_time:.1f} hr")
+
 
 class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
     "Validate that the geometry is suitable for casting in BioCement. Checks minimum mesh thickness and edge sharpness."
@@ -159,6 +163,16 @@ class BIOCEMENT_OT_create_conf_outer_mold(bpy.types.Operator):
         mesh = obj.data
         bm = bmesh.new()
         bm.from_mesh(mesh)
+
+        # Create a cylinder at the lowest point of the mesh for the drain
+        # This needs to be done before the mold is created so that the boolean modifier works correctly
+        drain_point = get_drain_point(bm)
+        bpy.ops.mesh.primitive_cylinder_add(
+            radius=0.05,
+            depth=0.26,
+            location=(drain_point.x, drain_point.y, drain_point.z - 0.025)
+        )
+        context.active_object.name = "Drain"
         
         # Create a new mesh for the copy
         new_mesh = bpy.data.meshes.new(name="ConfOuterMold")
@@ -195,6 +209,15 @@ class BIOCEMENT_OT_create_conf_outer_mold(bpy.types.Operator):
         # Apply the modifier to make the change permanent
         bpy.ops.object.modifier_apply(modifier=weld_modifier.name)
         bpy.ops.object.modifier_apply(modifier=solidify_modifier.name)
+
+        # Boolean difference to create the drain
+        bpy.ops.object.modifier_add(type='BOOLEAN')
+        bpy.context.object.modifiers["Boolean"].operation = 'DIFFERENCE'
+        bpy.context.object.modifiers["Boolean"].object = bpy.data.objects["Drain"]
+        bpy.ops.object.modifier_apply(modifier="Boolean")
+
+        # Delete the cylinder
+        bpy.data.objects.remove(bpy.data.objects["Drain"])
 
         bpy.ops.object.mode_set(mode='EDIT')
         return {'FINISHED'}
@@ -264,6 +287,16 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
         y_min, y_max = obj.bound_box[0][1], obj.bound_box[6][1]
         z_min, z_max = obj.bound_box[0][2], bound_z_avg
         
+        # Create a cylinder at the lowest point of the mesh for the drain
+        # This needs to be done before the cube is created so that the boolean modifier works correctly
+        drain_point = get_drain_point(bm)
+        bpy.ops.mesh.primitive_cylinder_add(
+            radius=0.05,
+            depth=0.26,
+            location=(drain_point.x, drain_point.y, drain_point.z - 0.025)
+        )
+        context.active_object.name = "Drain"
+
         # Create a cube that bounds the object
         bpy.ops.mesh.primitive_cube_add(
             size=1, 
@@ -277,8 +310,27 @@ class BIOCEMENT_OT_create_cast_outer_mold(bpy.types.Operator):
         bpy.context.object.modifiers["Boolean"].object = obj
         bpy.ops.object.modifier_apply(modifier="Boolean")
 
+        # Boolean difference to create the drain
+        bpy.ops.object.modifier_add(type='BOOLEAN')
+        bpy.context.object.modifiers["Boolean"].operation = 'DIFFERENCE'
+        bpy.context.object.modifiers["Boolean"].object = bpy.data.objects["Drain"]
+        bpy.ops.object.modifier_apply(modifier="Boolean")
+
+        # Delete the cylinder
+        bpy.data.objects.remove(bpy.data.objects["Drain"])
+
         bpy.ops.object.mode_set(mode='EDIT')
         return {'FINISHED'}
+    
+def get_drain_point(bm):
+    # Get the lowest point of the mesh
+    min_z = float('inf')
+    drain_point = None
+    for v in bm.verts:
+        if v.co.z < min_z:
+            min_z = v.co.z
+            drain_point = v.co
+    return drain_point
 
 class BIOCEMENT_OT_calculate_cure_time(bpy.types.Operator): 
     """Calculate Cure Time. Calculate the cure time based on the volume of the mold."""
