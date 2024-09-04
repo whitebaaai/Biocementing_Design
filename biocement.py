@@ -55,13 +55,15 @@ class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
 
         layout.operator("biocement.create_conf_outer_mold", text="Create Conformal Outer Mold")
         layout.operator("biocement.create_cast_outer_mold", text="Create Castable Outer Mold")
-        layout.operator("biocement.calculate_cure_time", text="Calculate Cure Time")
+        layout.operator("biocement.generate_recipe", text="Generate Recipe")
         # TODO: Add ability to create two piece molds
 
-        layout.label(text=f"# of Treatments: {context.scene.cure_time:.1f} hr")
-        layout.label(text=f"Media: {context.scene.cure_time:.1f} hr")
-        layout.label(text=f"Urea: {context.scene.cure_time:.1f} hr")
-        layout.label(text=f"Bacteria: {context.scene.cure_time:.1f} hr")
+        layout.label(text=f"# of Treatments: {context.scene.treatment_count:.1f}")
+        layout.label(text=f"Artifact Volume: {context.scene.artifact_volume:.1f} m^3")
+        layout.label(text=f"Sand: {context.scene.sand:.1f} kg")
+        layout.label(text=f"Bacteria: {context.scene.bacteria:.1f} kg")
+        layout.label(text=f"Urea: {context.scene.urea:.1f} kg")
+        layout.label(text=f"Food Media: {context.scene.food_media:.1f} kg")
 
 
 class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
@@ -112,6 +114,7 @@ class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
 
         return {'FINISHED'}
     
+# TODO: Update this default with a real number
 def validate_mesh_thickness(obj, bm, min_thickness=0.05):
     # Check if the mesh has a minimum thickness
     for face in bm.faces:
@@ -133,6 +136,7 @@ def validate_mesh_thickness(obj, bm, min_thickness=0.05):
         
     return True
 
+# TODO: Update this default with a real number
 def validate_edge_sharpness(bm, min_angle=np.pi/6):
     # Check if the mesh has sharp edges
     for edge in bm.edges:
@@ -146,6 +150,7 @@ def validate_edge_sharpness(bm, min_angle=np.pi/6):
             return False
     return True
 
+# TODO: Update this default with a real number
 def validate_vertex_sharpness(bm, min_angle=np.pi/6):
     # Check for sharp vertices using face normals
     for vert in bm.verts:
@@ -345,10 +350,10 @@ def get_drain_point(bm):
             drain_point = v.co
     return drain_point
 
-class BIOCEMENT_OT_calculate_cure_time(bpy.types.Operator): 
-    """Calculate Cure Time. Calculate the cure time based on the volume of the mold."""
-    bl_idname = "biocement.calculate_cure_time"
-    bl_label = "Calculate Cure Time"
+class BIOCEMENT_OT_generate_recipe(bpy.types.Operator): 
+    """Generate Recipe. Recipe is based on the volume of the mold."""
+    bl_idname = "biocement.generate_recipe"
+    bl_label = "Generate Recipe"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -365,13 +370,18 @@ class BIOCEMENT_OT_calculate_cure_time(bpy.types.Operator):
         bm.from_mesh(mesh)
 
         volume = calc_volume(bm)
-        self.report({'INFO'}, f"Volume: {volume:.2f} m^3")
+        # self.report({'INFO'}, f"Volume: {volume:.2f} m^3")
 
-        # TODO: Placeholder calc for cure_time
-        # Cure time is actually pretty complicated (https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860356)
-        cure_time = volume
-        context.scene.cure_time = cure_time
-        self.report({'INFO'}, f"Cure time calculated: {cure_time:.1f} hr")
+        # Treatement count is a function of height
+        treatment_count = int(np.ceil(obj.dimensions.z / 2))
+
+        # TODO: Update this default with a real number
+        context.scene.artifact_volume = volume
+        context.scene.treatment_count = treatment_count
+        context.scene.sand = volume * 1600                         # 1600 kg/m^3
+        context.scene.bacteria = volume * 10 * treatment_count     # 10 kg/m^3
+        context.scene.urea = volume * 10 * treatment_count         # 10 kg/m^3
+        context.scene.food_media = volume * 20 * treatment_count   # 20 kg/m^3
 
         return {'FINISHED'}
     
@@ -387,29 +397,56 @@ def calc_volume(bm):
     return np.abs(volume / 6)
 
 def register():
-    # TODO: Add real options to the dropdown menus
-    # TODO: Add a dropdown for each parameter
-    # TODO: Change the names of the dropdowns to be more descriptive
-    # Populate the dropdown menus
-    bpy.types.Scene.my_dropdown_menu_1 = bpy.props.EnumProperty(
-        items=[
-            ("option1", "Option 1", ""),
-            ("option2", "Option 2", ""),
-            ("option3", "Option 3", "")
-        ]
-    )
-    bpy.types.Scene.my_dropdown_menu_2 = bpy.props.EnumProperty(
-        items=[
-            ("optionA", "Option A", ""),
-            ("optionB", "Option B", ""),
-            ("optionC", "Option C", "")
-        ]
-    )
+    # # Populate the dropdown menus
+    # bpy.types.Scene.my_dropdown_menu_1 = bpy.props.EnumProperty(
+    #     items=[
+    #         ("option1", "Option 1", ""),
+    #         ("option2", "Option 2", ""),
+    #         ("option3", "Option 3", "")
+    #     ]
+    # )
+    # bpy.types.Scene.my_dropdown_menu_2 = bpy.props.EnumProperty(
+    #     items=[
+    #         ("optionA", "Option A", ""),
+    #         ("optionB", "Option B", ""),
+    #         ("optionC", "Option C", "")
+    #     ]
+    # )
 
     # Register the operators and panels
-    bpy.types.Scene.cure_time = bpy.props.FloatProperty(
-        name="Cure Time",
-        description="Expected curing time in hours",
+    bpy.types.Scene.treatment_count = bpy.props.IntProperty(
+        name="Treatment Count",
+        description="Number of treatments needed",
+        default=0
+    )
+
+    bpy.types.Scene.artifact_volume = bpy.props.FloatProperty(
+        name="Artifact Volume",
+        description="Volume of the Artifact in m^3",
+        default=0.0
+    )
+
+    bpy.types.Scene.sand = bpy.props.FloatProperty(
+        name="Sand Weight",
+        description="Amount of sand needed in kg",
+        default=0.0
+    )
+
+    bpy.types.Scene.bacteria = bpy.props.FloatProperty(
+        name="Bacteria Weight",
+        description="Weight of bacteria in g",
+        default=0.0
+    )
+
+    bpy.types.Scene.urea = bpy.props.FloatProperty(
+        name="Urea Weight",
+        description="Weight of urea in g",
+        default=0.0
+    )
+
+    bpy.types.Scene.food_media = bpy.props.FloatProperty(
+        name="Food Media Weight",
+        description="Weight of food media in g",
         default=0.0
     )
 
@@ -440,14 +477,14 @@ def register():
     bpy.utils.register_class(BIOCEMENT_OT_validate_geometry)
     bpy.utils.register_class(BIOCEMENT_OT_create_conf_outer_mold)
     bpy.utils.register_class(BIOCEMENT_OT_create_cast_outer_mold)
-    bpy.utils.register_class(BIOCEMENT_OT_calculate_cure_time)
+    bpy.utils.register_class(BIOCEMENT_OT_generate_recipe)
     bpy.utils.register_class(BIOCEMENT_PT_MainPanel)
 
 def unregister():
     bpy.utils.unregister_class(BIOCEMENT_OT_validate_geometry)
     bpy.utils.unregister_class(BIOCEMENT_OT_create_conf_outer_mold)
     bpy.utils.unregister_class(BIOCEMENT_OT_create_cast_outer_mold)
-    bpy.utils.unregister_class(BIOCEMENT_OT_calculate_cure_time)
+    bpy.utils.unregister_class(BIOCEMENT_OT_generate_recipe)
     bpy.utils.unregister_class(BIOCEMENT_PT_MainPanel)
     del bpy.types.Scene.my_dropdown_menu_1
     del bpy.types.Scene.my_dropdown_menu_2
