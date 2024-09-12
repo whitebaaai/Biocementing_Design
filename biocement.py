@@ -58,14 +58,12 @@ class BIOCEMENT_PT_MainPanel(bpy.types.Panel):
         layout.operator("biocement.generate_recipe", text="Generate Recipe")
         # TODO: Add ability to create two piece molds
 
-        layout.label(text=f"# of Treatments: {context.scene.treatment_count:.1f}")
-        layout.label(text=f"Artifact Volume: {context.scene.artifact_volume:.1f} L")
-        layout.label(text=f"Sand: {context.scene.sand:.1f} kg")
-        layout.label(text=f"Bacteria: {context.scene.bacteria:.1f} g")
-        layout.label(text=f"Urea: {context.scene.urea:.1f} g")
-        layout.label(text=f"Ammonium Chloride: {context.scene.ammonium_chloride:.1f} g")
-        layout.label(text=f"Sodium Bicarbonate: {context.scene.sodium_bicarbonate:.1f} g")
-        layout.label(text=f"Calcium Chloride: {context.scene.calcium_chloride:.1f} g")
+        layout.label(text=f"3D Artifact Volume: {context.scene.artifact_volume:.3f} L")
+        layout.label(text=f"Aggregate Size: 0.4 - 2 mm")
+        layout.label(text=f"Aggregate Weight: {context.scene.sand:.3f} kg")
+        layout.label(text=f"Culture Media Volume: {context.scene.culture_media:.3f} L")
+        layout.label(text=f"Biocementing Solution Volume: {context.scene.cementing_solution:.3f} L")
+        layout.label(text=f"# of Treatments: {context.scene.treatment_count}")
 
 class BIOCEMENT_OT_validate_geometry(bpy.types.Operator):
     "Validate that the geometry is suitable for casting in BioCement. Checks minimum mesh thickness and edge sharpness."
@@ -375,16 +373,13 @@ class BIOCEMENT_OT_generate_recipe(bpy.types.Operator):
 
         # Treatement count is a function of height
         # treatment_count = int(np.ceil(obj.dimensions.z / 2))
-        treatment_count = 6
+        treatment_count = 2
 
         context.scene.artifact_volume = volume                              # Map m^3 to L (assuming people won't change the default unit)
         context.scene.treatment_count = treatment_count
         context.scene.sand = volume * 1.6                                   # 1.6 kg/liter
-        context.scene.bacteria = volume * 10 * treatment_count              # 10 g/liter
-        context.scene.urea = volume * 30 * treatment_count                  # 30 g/liter
-        context.scene.ammonium_chloride = volume * 10 * treatment_count     # 10 g/liter
-        context.scene.sodium_bicarbonate = volume * 2.12 * treatment_count  # 2.12 g/liter
-        context.scene.calcium_chloride = volume * 73.5 * treatment_count    # 73.5 g/liter
+        context.scene.culture_media = volume * 0.2                          # 20% of the volume
+        context.scene.cementing_solution = volume * 0.2                     # 20% of the volume
 
         return {'FINISHED'}
     
@@ -435,33 +430,15 @@ def register():
         default=0.0
     )
 
-    bpy.types.Scene.bacteria = bpy.props.FloatProperty(
-        name="Bacteria Weight",
-        description="Weight of bacteria in g",
+    bpy.types.Scene.culture_media = bpy.props.FloatProperty(
+        name="Culture Media Volume",
+        description="Volume of culture media in ml",
         default=0.0
     )
 
-    bpy.types.Scene.urea = bpy.props.FloatProperty(
-        name="Urea Weight",
-        description="Weight of urea in g",
-        default=0.0
-    )
-
-    bpy.types.Scene.ammonium_chloride = bpy.props.FloatProperty(
-        name="Ammonium Chloride Weight",
-        description="Weight of Ammonium Chloride in g",
-        default=0.0
-    )
-
-    bpy.types.Scene.sodium_bicarbonate = bpy.props.FloatProperty(
-        name="Sodium Bicarbonate Weight",
-        description="Weight of Sodium Bicarbonate in g",
-        default=0.0
-    )
-
-    bpy.types.Scene.calcium_chloride = bpy.props.FloatProperty(
-        name="Calcium Chloride Weight",
-        description="Weight of Calcium Chloride in g",
+    bpy.types.Scene.cementing_solution = bpy.props.FloatProperty(
+        name="Biocementing Solution Volume",
+        description="Volume of biocementing solution in g",
         default=0.0
     )
 
